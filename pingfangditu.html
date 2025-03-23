@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>昌邑区平房管理系统</title>
+    <title>中部盲肠区平房管理系统</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.4.4/css/tabulator_mobile.min.css">
     <style>
         :root {
@@ -20,46 +20,40 @@
         body {
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f0f2f5;
+            background: #f5f5f5;
         }
 
         #mapContainer {
             width: 100%;
-            height: 55vh;
+            height: 60vh;
             position: relative;
         }
 
-        /* 操作按钮组 */
-        .action-bar {
+        .control-bar {
             position: fixed;
             bottom: 0;
             width: 100%;
             padding: 10px;
-            background: #fff;
+            background: white;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 5px;
             box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
         }
 
-        .action-btn {
-            padding: 14px;
+        .mobile-btn {
+            padding: 12px;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             background: var(--primary);
             color: white;
             font-size: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 5px;
         }
 
-        .action-btn.secondary {
-            background: var(--secondary);
-        }
-
-        /* 模态窗口 */
         .modal {
             position: fixed;
             top: 0;
@@ -82,16 +76,8 @@
             overflow-y: auto;
         }
 
-        /* 输入表单 */
         .form-group {
             margin: 12px 0;
-        }
-
-        .form-label {
-            display: block;
-            color: #666;
-            margin-bottom: 6px;
-            font-size: 14px;
         }
 
         .form-input {
@@ -102,135 +88,81 @@
             font-size: 16px;
         }
 
-        /* 定位提示 */
-        .location-hint {
-            position: absolute;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.85);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-size: 14px;
-            backdrop-filter: blur(5px);
-            z-index: 999;
-        }
-
-        /* 数据表格 */
-        .tabulator {
-            background: transparent;
-            font-size: 14px;
-        }
-
-        .tabulator-row {
-            background: white !important;
-            margin: 6px 0;
-            border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        }
-
-        /* GPS定位按钮 */
-        .gps-button {
-            position: absolute;
-            bottom: 20px;
-            right: 15px;
-            background: white;
+        .location-info {
+            background: #f8f9fa;
             padding: 12px;
-            border-radius: 50%;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
-            z-index: 999;
+            border-radius: 8px;
+            margin: 15px 0;
         }
     </style>
-</head>
-<body>
-    <div id="mapContainer"></div>
-    <div class="location-hint" id="locationHint">点击地图选择位置</div>
-    <button class="gps-button" onclick="locateUser()">📍</button>
-
-    <div class="action-bar">
-        <button class="action-btn" onclick="showEditor()">➕ 新建</button>
-        <button class="action-btn secondary" onclick="showList()">📋 列表</button>
-        <button class="action-btn secondary" onclick="toggleImport()">📁 导入</button>
-    </div>
-
-    <!-- 编辑模态框 -->
-    <div class="modal" id="editModal">
-        <div class="modal-content">
-            <h3 style="margin:0 0 20px 3px;">住户信息</h3>
-            
-            <div class="form-group">
-                <label class="form-label">户主姓名</label>
-                <input type="text" class="form-input" id="houseName" required>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">户号</label>
-                <input type="text" class="form-input" id="houseNumber" required>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">详细地址</label>
-                <input type="text" class="form-input" id="houseAddress" required>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">联系电话</label>
-                <input type="tel" class="form-input" id="housePhone">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">已选位置</label>
-                <div id="positionInfo" style="padding:12px;background:#f8f9fa;border-radius:8px;">
-                    经纬度：<span id="coordinates">未选择</span>
-                </div>
-            </div>
-
-            <div style="display:flex; gap:10px; margin-top:25px;">
-                <button class="action-btn" onclick="saveData()" style="flex:1;">保存</button>
-                <button class="action-btn" onclick="closeEditor()" style="background:var(--danger);flex:1;">取消</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 数据列表模态框 -->
-    <div class="modal" id="listModal">
-        <div class="modal-content">
-            <h3 style="margin:0 0 15px 3px;">住户列表</h3>
-            <div id="dataTable" style="height:60vh;"></div>
-        </div>
-    </div>
-
-    <!-- 文件导入模态框 -->
-    <div class="modal" id="importModal">
-        <div class="modal-content">
-            <h3 style="margin:0 0 15px 3px;">数据导入</h3>
-            <input type="file" class="form-input" id="fileInput" accept=".xlsx" 
-                  style="padding:15px;border:2px dashed #ddd;" 
-                  onchange="handleFileSelect(event)">
-            <div style="margin:20px 0; color:#666; text-align:center;">支持.xlsx格式文件</div>
-            <button class="action-btn secondary" onclick="toggleImport()">关闭</button>
-        </div>
-    </div>
-
+    <script>
+        window._AMapSecurityConfig = {
+            securityJsCode: '6dc8e1105738b3c7f8a200f1ab73efb5'
+        };
+    </script>
     <script src="https://webapi.amap.com/maps?v=2.0&key=81af62ba5eb2df43dce2f2e564caa0ae"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.4.4/js/tabulator.min.js"></script>
+</head>
+<body>
+    <div id="mapContainer"></div>
+    <div class="control-bar">
+        <button class="mobile-btn" onclick="showForm()">📝 新建</button>
+        <button class="mobile-btn secondary" onclick="toggleAutoLocation()">📍 定位</button>
+        <button class="mobile-btn secondary" onclick="showData()">📋 数据</button>
+    </div>
+
+    <!-- 输入表单 -->
+    <div class="modal" id="inputModal">
+        <div class="modal-content">
+            <h3>房屋信息录入</h3>
+            <div class="form-group">
+                <input type="text" class="form-input" id="houseName" placeholder="户主姓名" required>
+            </div>
+            <div class="form-group">
+                <input type="text" class="form-input" id="houseNumber" placeholder="户号" required>
+            </div>
+            <div class="form-group">
+                <input type="text" class="form-input" id="houseAddress" placeholder="详细地址" required>
+            </div>
+            <div class="form-group">
+                <input type="tel" class="form-input" id="housePhone" placeholder="联系电话">
+            </div>
+            <div class="location-info">
+                <div>当前定位：</div>
+                <div id="currentLocation">正在获取位置...</div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="mobile-btn" onclick="saveData()">保存</button>
+                <button class="mobile-btn danger" onclick="hideForm()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据管理 -->
+    <div class="modal" id="dataModal">
+        <div class="modal-content">
+            <h3>数据管理</h3>
+            <button class="mobile-btn secondary" onclick="exportExcel()">导出Excel</button>
+            <label class="mobile-btn secondary">
+                导入Excel
+                <input type="file" id="fileInput" hidden accept=".xlsx">
+            </label>
+            <div id="dataTable" style="height:55vh; margin-top:10px;"></div>
+        </div>
+    </div>
 
     <script>
-        // 系统初始化
-        let map, geolocation;
-        let currentMarker = null;
+        let map, geolocation, currentMarker;
         let houseData = JSON.parse(localStorage.getItem('houseData') || '[]');
-        
-        // 地图初始化
+
+        // 初始化地图
         function initMap() {
             map = new AMap.Map('mapContainer', {
                 zoom: 17,
                 doubleClickZoom: false
             });
 
-            // 添加定位组件
             AMap.plugin(['AMap.Geolocation'], () => {
                 geolocation = new AMap.Geolocation({
                     showButton: false,
@@ -239,157 +171,72 @@
                 map.addControl(geolocation);
             });
 
-            // 地图点击事件
-            map.on('click', (e) => {
-                if (document.getElementById('editModal').style.display === 'block') {
-                    setPosition(e.lnglat);
-                }
-            });
-
-            refreshMarkers();
+            updateMarkers();
         }
 
-        // 定位功能
-        function locateUser() {
+        // 自动定位
+        function toggleAutoLocation() {
             geolocation.getCurrentPosition((status, result) => {
                 if (status === 'complete') {
                     map.setCenter([result.position.lng, result.position.lat]);
+                    updateLocationDisplay(result.position);
                 }
             });
         }
 
-        // 数据存储
+        // 数据保存
         function saveData() {
-            const lnglat = currentMarker?.getPosition();
-            if (!lnglat) {
-                alert('请先在地图上选择位置');
-                return;
-            }
-
-            const newData = {
+            const newEntry = {
                 id: Date.now(),
                 name: document.getElementById('houseName').value,
                 number: document.getElementById('houseNumber').value,
                 address: document.getElementById('houseAddress').value,
                 phone: document.getElementById('housePhone').value,
-                lnglat: lnglat.toString()
+                lnglat: currentPosition
             };
 
-            houseData.push(newData);
+            houseData.push(newEntry);
             localStorage.setItem('houseData', JSON.stringify(houseData));
-            refreshMarkers();
-            closeEditor();
+            updateMarkers();
+            hideForm();
         }
 
-        // 标记管理
-        function refreshMarkers() {
-            // 清除旧标记
-            map.clearMap();
-            
-            // 添加新标记
-            houseData.forEach(item => {
-                if (item.lnglat) {
-                    const marker = new AMap.Marker({
-                        position: item.lnglat.split(',').map(Number),
-                        content: createMarkerContent(item),
-                        offset: new AMap.Pixel(-15, -15)
-                    });
-                    marker.on('click', () => showDetail(item));
-                    marker.setMap(map);
-                }
-            });
-        }
-
-        // 文件处理
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const workbook = XLSX.read(e.target.result, {type: 'array'});
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                houseData = XLSX.utils.sheet_to_json(sheet);
-                localStorage.setItem('houseData', JSON.stringify(houseData));
-                refreshMarkers();
-                toggleImport();
-            };
-            
-            reader.readAsArrayBuffer(file);
-        }
-
-        // 界面控制
-        function showEditor() {
-            document.getElementById('editModal').style.display = 'block';
-            document.getElementById('locationHint').style.display = 'block';
-            map.setZoom(17);
-        }
-
-        function closeEditor() {
-            document.getElementById('editModal').style.display = 'none';
-            document.getElementById('locationHint').style.display = 'none';
-            currentMarker = null;
-            map.clearMap();
-            refreshMarkers();
-        }
-
-        function setPosition(lnglat) {
-            // 清除临时标记
-            if (currentMarker) {
-                map.remove(currentMarker);
-            }
-            
-            // 创建新标记
-            currentMarker = new AMap.Marker({
-                position: lnglat,
-                content: createTempMarker(),
-                offset: new AMap.Pixel(-15, -15)
-            });
-            currentMarker.setMap(map);
-            
-            // 显示坐标信息
-            document.getElementById('coordinates').textContent = 
-                `${lnglat.lng.toFixed(6)}, ${lnglat.lat.toFixed(6)}`;
-        }
-
-        // 辅助函数
-        function createMarkerContent(data) {
-            return `
-                <div style="background:${var(--secondary)}; color:white; 
-                    padding:6px 10px; border-radius:15px; font-size:12px;
-                    box-shadow:0 2px 6px rgba(0,0,0,0.2);">
-                    ${data.number} - ${data.name}
-                </div>
-            `;
-        }
-
-        function createTempMarker() {
-            return `
-                <div style="background:${var(--primary)}; color:white;
-                    width:30px; height:30px; border-radius:50%;
-                    display:flex; align-items:center; justify-content:center;
-                    box-shadow:0 3px 12px rgba(0,0,0,0.2);">
-                    📍
-                </div>
-            `;
-        }
-
-        // 初始化表格
+        // 表格管理
         const dataTable = new Tabulator("#dataTable", {
             data: houseData,
             layout: "fitColumns",
-            responsiveLayout: "collapse",
             columns: [
                 {title:"户号", field:"number", width:100},
                 {title:"姓名", field:"name", width:120},
                 {title:"地址", field:"address", widthGrow:2},
                 {
-                    title:"操作", 
-                    formatter:() => '<button class="action-btn" style="padding:6px 12px;">详情</button>',
-                    cellClick: (e, cell) => showDetail(cell.getData())
+                    title:"操作",
+                    formatter:() => '<button class="mobile-btn">🗑️</button>',
+                    cellClick:(e, cell) => deleteEntry(cell.getData().id)
                 }
             ]
         });
 
+        // 文件处理
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const workbook = XLSX.read(e.target.result, {type: 'array'});
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                houseData = json;
+                localStorage.setItem('houseData', JSON.stringify(houseData));
+                updateMarkers();
+                dataTable.replaceData(houseData);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function exportExcel() {
+            dataTable.download("xlsx", "房屋数据.xlsx", {sheetName: "数据"});
+        }
+
+        // 初始化
         window.onload = initMap;
     </script>
 </body>
