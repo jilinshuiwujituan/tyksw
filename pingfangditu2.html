@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>中部平面管理系统</title>
+    <title>昌邑区房屋管理系统</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.4.4/css/tabulator_mobile.min.css">
     <style>
         :root {
@@ -46,6 +46,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            touch-action: manipulation; /* 优化移动端点击 */
         }
 
         .modal {
@@ -68,6 +69,7 @@
             border-radius: 20px 20px 0 0;
             padding: 20px;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* 移动端滚动优化 */
         }
 
         /* 移动端适配 */
@@ -93,12 +95,10 @@
                 padding: 8px;
             }
         }
-
-        /* 其他样式保持不变 */
     </style>
     <script>
         window._AMapSecurityConfig = {
-            securityJsCode: '6dc8e1105738b3c7f8a200f1ab73efb5'
+            securityJsCode: '	6dc8e1105738b3c7f8a200f1ab73efb5'
         };
     </script>
     <script src="https://webapi.amap.com/maps?v=2.0&key=81af62ba5eb2df43dce2f2e564caa0ae"></script>
@@ -109,81 +109,249 @@
     <div id="mapContainer"></div>
     
     <div class="control-bar">
-        <button class="mobile-btn" onclick="showForm()">📝 新建</button>
-        <button class="mobile-btn secondary" onclick="locateUser()">📍 定位</button>
-        <button class="mobile-btn secondary" onclick="showData()">📋 数据</button>
+        <button class="mobile-btn" id="btnNew">📝 新建</button>
+        <button class="mobile-btn secondary" id="btnLocate">📍 定位</button>
+        <button class="mobile-btn secondary" id="btnData">📋 数据</button>
     </div>
 
     <!-- 输入表单 -->
     <div class="modal" id="inputModal">
         <div class="modal-content">
-            <!-- 表单内容保持不变 -->
+            <h3>房屋信息录入</h3>
+            <p style="color:#666;">请移动地图选择位置后填写信息</p>
+            <div class="form-group">
+                <input type="text" class="form-input" id="houseName" placeholder="户主姓名" required>
+            </div>
+            <div class="form-group">
+                <input type="text" class="form-input" id="houseNumber" placeholder="户号" required>
+            </div>
+            <div class="form-group">
+                <input type="tel" class="form-input" id="housePhone" placeholder="联系电话">
+            </div>
+            <div class="form-group">
+                <input type="text" class="form-input" id="houseAddress" placeholder="详细地址" required>
+            </div>
+            
+            <div class="form-group">
+                <label>是否有人居住：</label>
+                <div class="radio-group">
+                    <label class="radio-item">
+                        <input type="radio" name="isOccupied" value="1" required> 是
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="isOccupied" value="0"> 否
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>是否有供水：</label>
+                <div class="radio-group">
+                    <label class="radio-item">
+                        <input type="radio" name="hasWater" value="1" required> 是
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="hasWater" value="0"> 否
+                    </label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap:10px; margin-top:20px;">
+                <button class="mobile-btn" id="btnSave">保存</button>
+                <button class="mobile-btn danger" id="btnCancel">取消</button>
+            </div>
         </div>
     </div>
 
     <!-- 数据管理 -->
     <div class="modal" id="dataModal">
         <div class="modal-content">
-            <!-- 数据管理内容保持不变 -->
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                <h3>数据管理</h3>
+                <button class="mobile-btn danger" id="btnClose">关闭</button>
+            </div>
+            <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+                <button class="mobile-btn secondary" id="btnExport">导出Excel</button>
+                <label class="mobile-btn secondary">
+                    导入Excel
+                    <input type="file" id="fileInput" hidden accept=".xlsx">
+                </label>
+            </div>
             <div id="dataTable" style="height: 60vh;"></div>
         </div>
     </div>
 
     <script>
-        // 系统变量
+        // 系统初始化
         let map, geolocation;
         let houseData = JSON.parse(localStorage.getItem('houseData') || '[]');
         let currentPosition = null;
         let tempMarker = null;
 
+        // 事件监听器统一注册
+        function initEventListeners() {
+            // 按钮事件
+            document.getElementById('btnNew').addEventListener('click', showForm);
+            document.getElementById('btnLocate').addEventListener('click', locateUser);
+            document.getElementById('btnData').addEventListener('click', showData);
+            document.getElementById('btnSave').addEventListener('click', saveData);
+            document.getElementById('btnCancel').addEventListener('click', hideForm);
+            document.getElementById('btnClose').addEventListener('click', closeDataModal);
+            document.getElementById('btnExport').addEventListener('click', exportExcel);
+            
+            // 文件上传
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        }
+
         // 地图初始化
         function initMap() {
-            map = new AMap.Map('mapContainer', {
-                zoom: 17,
-                center: [126.5873, 43.8379],
-                dragEnable: true,
-                touchZoom: true,   // 启用触摸缩放
-                doubleClickZoom: false  // 禁用双击缩放
-            });
-
-            // 移动端触摸事件处理
-            map.on('complete', () => {
-                map.plugin(['AMap.ToolBar'], () => {
-                    map.addControl(new AMap.ToolBar({
-                        position: 'RB'
-                    }));
+            try {
+                map = new AMap.Map('mapContainer', {
+                    zoom: 17,
+                    center: [126.5873, 43.8379],
+                    dragEnable: true,
+                    touchZoom: true,
+                    doubleClickZoom: false
                 });
-            });
 
-            // 其他初始化代码保持不变
+                // 地图事件
+                map.on('movend', handleMapMove);
+                map.on('complete', () => {
+                    AMap.plugin(['AMap.Geolocation', 'AMap.ToolBar'], () => {
+                        geolocation = new AMap.Geolocation({
+                            showButton: false,
+                            zoomToAccuracy: true
+                        });
+                        map.addControl(geolocation);
+                        
+                        // 添加工具栏
+                        map.addControl(new AMap.ToolBar({
+                            position: 'RB'
+                        }));
+                    });
+                });
+
+                updateMarkers();
+                console.log('地图初始化成功');
+
+            } catch (error) {
+                console.error('地图初始化失败:', error);
+                alert('地图加载失败，请检查密钥配置');
+            }
         }
 
-        // 增强标记点击事件（移动端适配）
-        function createMarker(item) {
-            const marker = new AMap.Marker({
-                position: item.lnglat,
-                content: '<div style="background:var(--secondary);color:white;padding:6px;border-radius:4px">🏠</div>',
-                extData: item  // 保存原始数据
-            });
+        // 核心功能函数
+        function handleMapMove() {
+            const center = map.getCenter();
+            updateTempMarker(center);
+        }
 
-            // 统一点击处理
-            const showInfoWindow = () => {
-                const infoWindow = new AMap.InfoWindow({
-                    content: buildInfoContent(marker.getExtData()),
-                    offset: new AMap.Pixel(0, -30),
-                    autoMove: true
-                });
-                infoWindow.open(map, marker.getPosition());
+        function updateTempMarker(lnglat) {
+            currentPosition = lnglat;
+            if(tempMarker) map.remove(tempMarker);
+            
+            tempMarker = new AMap.Marker({
+                position: lnglat,
+                content: '<div style="background:var(--primary);color:white;padding:8px;border-radius:50%">📍</div>',
+                offset: new AMap.Pixel(-15, -15)
+            });
+            tempMarker.setMap(map);
+        }
+
+        function locateUser() {
+            if (!geolocation) {
+                alert('定位功能初始化中，请稍后重试');
+                return;
+            }
+            
+            geolocation.getCurrentPosition((status, result) => {
+                if (status === 'complete') {
+                    map.setCenter(result.position);
+                    updateTempMarker(result.position);
+                } else {
+                    alert('定位失败，请检查定位权限');
+                }
+            });
+        }
+
+        function showForm() {
+            try {
+                if(tempMarker) map.remove(tempMarker);
+                currentPosition = map.getCenter();
+                updateTempMarker(currentPosition);
+                
+                // 清空表单
+                document.getElementById('houseName').value = '';
+                document.getElementById('houseNumber').value = '';
+                document.getElementById('housePhone').value = '';
+                document.getElementById('houseAddress').value = '';
+                document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+                
+                document.getElementById('inputModal').style.display = 'block';
+            } catch (error) {
+                console.error('打开表单失败:', error);
+            }
+        }
+
+        function hideForm() {
+            document.getElementById('inputModal').style.display = 'none';
+        }
+
+        function saveData() {
+            if (!currentPosition) {
+                alert('请移动地图选择位置');
+                return;
+            }
+
+            const isOccupied = document.querySelector('input[name="isOccupied"]:checked')?.value || '0';
+            const hasWater = document.querySelector('input[name="hasWater"]:checked')?.value || '0';
+
+            const newEntry = {
+                id: Date.now(),
+                name: document.getElementById('houseName').value,
+                number: document.getElementById('houseNumber').value,
+                phone: document.getElementById('housePhone').value,
+                address: document.getElementById('houseAddress').value,
+                isOccupied: parseInt(isOccupied),
+                hasWater: parseInt(hasWater),
+                lnglat: currentPosition
             };
 
-            // 同时绑定多个事件
-            marker.on('click', showInfoWindow);
-            marker.on('touchstart', showInfoWindow);
+            houseData.push(newEntry);
+            localStorage.setItem('houseData', JSON.stringify(houseData));
+            updateMarkers();
+            hideForm();
             
-            return marker;
+            // 清理临时状态
+            map.remove(tempMarker);
+            tempMarker = null;
+            currentPosition = null;
         }
 
-        // 信息内容生成
+        function updateMarkers() {
+            map.clearMap();
+            houseData.forEach(item => {
+                const marker = new AMap.Marker({
+                    position: item.lnglat,
+                    content: '<div style="background:var(--secondary);color:white;padding:6px;border-radius:4px">🏠</div>',
+                    extData: item
+                });
+                
+                // 统一事件处理
+                const showInfo = () => {
+                    new AMap.InfoWindow({
+                        content: buildInfoContent(marker.getExtData()),
+                        offset: new AMap.Pixel(0, -30),
+                        autoMove: true
+                    }).open(map, marker.getPosition());
+                };
+                
+                marker.on('click', showInfo);
+                marker.on('touchstart', showInfo);
+                marker.setMap(map);
+            });
+        }
+
         function buildInfoContent(item) {
             return `<div class="info-window">
                 <h4>${item.name}</h4>
@@ -197,7 +365,56 @@
             </div>`;
         }
 
-        // 表格配置（移动端优化）
+        // 数据管理功能
+        function showData() {
+            document.getElementById('dataModal').style.display = 'block';
+            dataTable.replaceData(formatTableData(houseData));
+        }
+
+        function closeDataModal() {
+            document.getElementById('dataModal').style.display = 'none';
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const workbook = XLSX.read(e.target.result, {type: 'array'});
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                houseData = json.map(item => ({
+                    id: item.id || Date.now(),
+                    name: item.户名,
+                    number: item.户号,
+                    phone: item.电话,
+                    address: item.地址,
+                    isOccupied: item.居住状态 === '是' ? 1 : 0,
+                    hasWater: item.供水状态 === '是' ? 1 : 0,
+                    lnglat: new AMap.LngLat(
+                        parseFloat(item.经度),
+                        parseFloat(item.纬度)
+                    )
+                }));
+                
+                localStorage.setItem('houseData', JSON.stringify(houseData));
+                updateMarkers();
+                dataTable.replaceData(formatTableData(houseData));
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function formatTableData(data) {
+            return data.map(item => ({
+                ...item,
+                lng: item.lnglat.lng,
+                lat: item.lnglat.lat,
+                isOccupied: item.isOccupied ? '有人' : '无人',
+                hasWater: item.hasWater ? '有' : '无'
+            }));
+        }
+
+        // 表格配置
         const dataTable = new Tabulator("#dataTable", {
             columns: [
                 {title:"户号", field:"number", width:100, responsive:1},
@@ -206,6 +423,8 @@
                 {title:"地址", field:"address", widthGrow:1, responsive:3},
                 {title:"居住状态", field:"isOccupied", width:100, responsive:2},
                 {title:"供水状态", field:"hasWater", width:100, responsive:2},
+                {title:"经度", field:"lng", formatter: cell => cell.getValue().toFixed(6)},
+                {title:"纬度", field:"lat", formatter: cell => cell.getValue().toFixed(6)},
                 {
                     title:"操作",
                     field:"_actions",
@@ -223,19 +442,40 @@
                     width:60,
                     minWidth:60,
                     headerSort:false,
-                    responsive:0  // 始终显示
+                    responsive:0
                 }
             ],
             layout:"fitColumns",
             responsiveLayout:"collapse",
-            mobileLayout:true,
-            responsiveLayoutCollapseStartOpen:false
+            mobileLayout:true
         });
 
-        // 其他功能保持不变...
+        // 导出功能
+        function exportExcel() {
+            const exportData = houseData.map(item => ({
+                "户号": item.number,
+                "户名": item.name,
+                "电话": item.phone,
+                "地址": item.address,
+                "居住状态": item.isOccupied ? '是' : '否',
+                "供水状态": item.hasWater ? '是' : '否',
+                "经度": item.lnglat.lng,
+                "纬度": item.lnglat.lat
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "数据");
+            XLSX.writeFile(workbook, "房屋数据.xlsx");
+        }
 
         // 启动系统
-        window.onload = initMap;
+        window.addEventListener('load', () => {
+            initMap();
+            initEventListeners();
+            houseData = JSON.parse(localStorage.getItem('houseData') || '[]');
+            console.log('系统初始化完成');
+        });
     </script>
 </body>
 </html>
