@@ -1,0 +1,241 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>中部平面管理系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.4.4/css/tabulator_mobile.min.css">
+    <style>
+        :root {
+            --primary: #1890ff;
+            --secondary: #52c41a;
+            --danger: #ff4d4f;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+
+        #mapContainer {
+            width: 100%;
+            height: 60vh;
+            position: relative;
+        }
+
+        .control-bar {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            padding: 10px;
+            background: white;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+        }
+
+        .mobile-btn {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.4);
+            display: none;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 75vh;
+            background: white;
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        /* 移动端适配 */
+        @media screen and (max-width: 768px) {
+            .tabulator-cell[data-field="_actions"] {
+                display: table-cell !important;
+                width: 60px !important;
+            }
+            
+            .amap-info-content {
+                max-width: 80vw !important;
+                font-size: 14px;
+                padding: 8px !important;
+            }
+            
+            .mobile-btn {
+                padding: 8px;
+                font-size: 12px;
+            }
+            
+            .form-input {
+                font-size: 14px;
+                padding: 8px;
+            }
+        }
+
+        /* 其他样式保持不变 */
+    </style>
+    <script>
+        window._AMapSecurityConfig = {
+            securityJsCode: '6dc8e1105738b3c7f8a200f1ab73efb5'
+        };
+    </script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=81af62ba5eb2df43dce2f2e564caa0ae"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.4.4/js/tabulator.min.js"></script>
+</head>
+<body>
+    <div id="mapContainer"></div>
+    
+    <div class="control-bar">
+        <button class="mobile-btn" onclick="showForm()">📝 新建</button>
+        <button class="mobile-btn secondary" onclick="locateUser()">📍 定位</button>
+        <button class="mobile-btn secondary" onclick="showData()">📋 数据</button>
+    </div>
+
+    <!-- 输入表单 -->
+    <div class="modal" id="inputModal">
+        <div class="modal-content">
+            <!-- 表单内容保持不变 -->
+        </div>
+    </div>
+
+    <!-- 数据管理 -->
+    <div class="modal" id="dataModal">
+        <div class="modal-content">
+            <!-- 数据管理内容保持不变 -->
+            <div id="dataTable" style="height: 60vh;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 系统变量
+        let map, geolocation;
+        let houseData = JSON.parse(localStorage.getItem('houseData') || '[]');
+        let currentPosition = null;
+        let tempMarker = null;
+
+        // 地图初始化
+        function initMap() {
+            map = new AMap.Map('mapContainer', {
+                zoom: 17,
+                center: [126.5873, 43.8379],
+                dragEnable: true,
+                touchZoom: true,   // 启用触摸缩放
+                doubleClickZoom: false  // 禁用双击缩放
+            });
+
+            // 移动端触摸事件处理
+            map.on('complete', () => {
+                map.plugin(['AMap.ToolBar'], () => {
+                    map.addControl(new AMap.ToolBar({
+                        position: 'RB'
+                    }));
+                });
+            });
+
+            // 其他初始化代码保持不变
+        }
+
+        // 增强标记点击事件（移动端适配）
+        function createMarker(item) {
+            const marker = new AMap.Marker({
+                position: item.lnglat,
+                content: '<div style="background:var(--secondary);color:white;padding:6px;border-radius:4px">🏠</div>',
+                extData: item  // 保存原始数据
+            });
+
+            // 统一点击处理
+            const showInfoWindow = () => {
+                const infoWindow = new AMap.InfoWindow({
+                    content: buildInfoContent(marker.getExtData()),
+                    offset: new AMap.Pixel(0, -30),
+                    autoMove: true
+                });
+                infoWindow.open(map, marker.getPosition());
+            };
+
+            // 同时绑定多个事件
+            marker.on('click', showInfoWindow);
+            marker.on('touchstart', showInfoWindow);
+            
+            return marker;
+        }
+
+        // 信息内容生成
+        function buildInfoContent(item) {
+            return `<div class="info-window">
+                <h4>${item.name}</h4>
+                <p>户号：${item.number}</p>
+                <p>电话：${item.phone || '无'}</p>
+                <p>地址：${item.address}</p>
+                <p>居住状态：${item.isOccupied ? '有人居住' : '无人居住'}</p>
+                <p>供水状态：${item.hasWater ? '有供水' : '无供水'}</p>
+                <p style="color:#666;">经度：${item.lnglat.lng.toFixed(6)}</p>
+                <p style="color:#666;">纬度：${item.lnglat.lat.toFixed(6)}</p>
+            </div>`;
+        }
+
+        // 表格配置（移动端优化）
+        const dataTable = new Tabulator("#dataTable", {
+            columns: [
+                {title:"户号", field:"number", width:100, responsive:1},
+                {title:"户名", field:"name", width:120, responsive:2},
+                {title:"电话", field:"phone", width:120, responsive:2},
+                {title:"地址", field:"address", widthGrow:1, responsive:3},
+                {title:"居住状态", field:"isOccupied", width:100, responsive:2},
+                {title:"供水状态", field:"hasWater", width:100, responsive:2},
+                {
+                    title:"操作",
+                    field:"_actions",
+                    formatter:() => '<button class="mobile-btn" style="padding:4px 8px">🗑️</button>',
+                    cellClick:(e, cell) => {
+                        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+                        if (isMobile && !confirm("确定要删除吗？")) return;
+                        
+                        const rowData = cell.getData();
+                        houseData = houseData.filter(item => item.id !== rowData.id);
+                        localStorage.setItem('houseData', JSON.stringify(houseData));
+                        dataTable.replaceData(formatTableData(houseData));
+                        updateMarkers();
+                    },
+                    width:60,
+                    minWidth:60,
+                    headerSort:false,
+                    responsive:0  // 始终显示
+                }
+            ],
+            layout:"fitColumns",
+            responsiveLayout:"collapse",
+            mobileLayout:true,
+            responsiveLayoutCollapseStartOpen:false
+        });
+
+        // 其他功能保持不变...
+
+        // 启动系统
+        window.onload = initMap;
+    </script>
+</body>
+</html>
